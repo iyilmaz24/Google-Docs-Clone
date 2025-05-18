@@ -1,0 +1,20 @@
+# this file contains common Bazel options
+
+# Enable Bzlmod for future-proofing (optional, modern dependency management)
+# common --enable_bzlmod
+
+# default build options
+build --java_language_version=11
+build --tool_java_language_version=11
+build --javacopt="-Xlint:all,-options,-path"
+build --color=yes
+build --show_progress_rate_limit=5 # Show progress every 5s
+
+# test options
+test --test_output=errors
+test --java_language_version=11
+test --tool_java_language_version=11
+
+# Add more common flags as needed
+# E.g., for remote caching/execution, Java versions, etc.
+# build --remote_cache=...

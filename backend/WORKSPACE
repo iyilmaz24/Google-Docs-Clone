@@ -1,0 +1,106 @@
+# this file defines the external dependencies of this Bazel project
+
+load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+
+# rules_jvm_external is for managing Maven dependencies
+RULES_JVM_EXTERNAL_VERSION = "5.3" 
+RULES_JVM_EXTERNAL_SHA256 = "cd73c859c93028a0d385d26560ac95df93cfbe7f68405850c85547598b582694"
+
+http_archive(
+    name = "rules_jvm_external",
+    sha256 = RULES_JVM_EXTERNAL_SHA256,
+    strip_prefix = "rules_jvm_external-%s" % RULES_JVM_EXTERNAL_VERSION,
+    url = "https://github.com/bazelbuild/rules_jvm_external/archive/refs/tags/%s.zip" % RULES_JVM_EXTERNAL_VERSION,
+)
+
+load("@rules_jvm_external//:defs.bzl", "maven_install")
+
+# define your Java dependencies
+# always check for the latest stable versions on Maven Central or the project's website.
+maven_install(
+    artifacts = [
+        # --- gRPC / Netty Dependencies ---
+        "io.grpc:grpc-netty-shaded:1.64.0",
+        "io.grpc:grpc-protobuf:1.64.0",
+        "io.grpc:grpc-stub:1.64.0",
+        "com.google.protobuf:protobuf-java:3.25.3", # ensure this aligns with protoc version
+        "com.google.protobuf:protobuf-java-util:3.25.3",
+        # for @Generated annotation (often needed by protoc >= 3.15)
+        "javax.annotation:javax.annotation-api:1.3.2",
+
+        # --- Jetty / WebSocket Dependencies (Using Jetty 11 as it's a common stable choice) ---
+        "org.eclipse.jetty:jetty-server:11.0.22",
+        "org.eclipse.jetty:jetty-servlet:11.0.22",
+        "org.eclipse.jetty:jetty-webapp:11.0.22", # often useful for servlet contexts
+        "org.eclipse.jetty.websocket:websocket-jetty-server:11.0.22",
+        "org.eclipse.jetty.websocket:websocket-jetty-api:11.0.22",
+        "org.eclipse.jetty.websocket:websocket-jetty-common:11.0.22", # may be needed transitively
+
+        # --- Guice (Dependency Injection) ---
+        "com.google.inject:guice:7.0.0", # No-AOP version is often preferred for servers: "com.google.inject:guice:7.0.0:no_aop"
+
+        # --- JSON Processing (for WebSocket if you send JSON messages) ---
+        "com.fasterxml.jackson.core:jackson-databind:2.17.1",
+
+        # --- Logging (SLF4J API + a backend like Logback or Log4j2) ---
+        # API
+        "org.slf4j:slf4j-api:2.0.13",
+        # Example backend: Logback
+        "ch.qos.logback:logback-classic:1.4.14",
+
+
+        # --- Testing Dependencies (Optional but recommended) ---
+        "junit:junit:4.13.2",
+        "com.google.truth:truth:1.4.2",
+        "org.mockito:mockito-core:5.11.0",
+        "io.grpc:grpc-testing:1.64.0",
+    ],
+    repositories = [
+        "https://repo1.maven.org/maven2",
+    ],
+    # (Optional but recommended for stricter dependency management)
+    fail_on_missing_direct_dependencies = True,
+)
+
+# Rules for Protocol Buffers and gRPC
+# check for latest versions:
+    # https://github.com/bazelbuild/rules_proto/releases
+    # https://github.com/grpc/grpc-java/blob/master/bazel/grpc_java_repositories.bzl (for grpc-java setup)
+
+# Bazel rules for Protocol Buffers
+RULES_PROTO_VERSION = "6.0.0-rc2"
+RULES_PROTO_SHA256 = "343a246bb26a280524090f30028aadf2806a29ef3f050db836917f5332346666"
+http_archive(
+    name = "rules_proto",
+    sha256 = RULES_PROTO_SHA256,
+    strip_prefix = "rules_proto-%s" % RULES_PROTO_VERSION,
+    urls = ["https://github.com/bazelbuild/rules_proto/archive/refs/tags/%s.zip" % RULES_PROTO_VERSION],
+)
+load("@rules_proto//proto:repositories.bzl", "rules_proto_dependencies", "rules_proto_toolchains")
+rules_proto_dependencies()
+rules_proto_toolchains() # This loads a default protoc
+
+# gRPC Java rules
+GRPC_JAVA_VERSION = "1.64.0" # match with grpc dependency versions
+http_archive(
+    name = "io_grpc_grpc_java",
+    sha256 = "e6c7a8504a61f234a9717db9130fcf78a2d2e114d7c280b45008795032621516", # SHA for 1.64.0
+    strip_prefix = "grpc-java-%s" % GRPC_JAVA_VERSION,
+    urls = ["https://github.com/grpc/grpc-java/archive/v%s.zip" % GRPC_JAVA_VERSION],
+)
+
+load("@io_grpc_grpc_java//bazel:grpc_java_repositories.bzl", "grpc_java_repositories")
+grpc_java_repositories(
+    omit_bazel_skylib = True, # Iif you load bazel_skylib separately or it's provided by rules_jvm_external
+    omit_com_google_protobuf = True, # we load protobuf-java via maven_install
+    omit_io_bazel_rules_kotlin = True, # if not using Kotlin for gRPC generation
+)
+
+# Required by grpc_java_repositories if not omitted
+# http_archive(
+# name = "bazel_skylib",
+# sha256 = "...", # Find current sha256
+# urls = ["https://github.com/bazelbuild/bazel-skylib/releases/download/.../bazel-skylib....tar.gz"],
+# )
+# load("@bazel_skylib//:workspace.bzl", "bazel_skylib_workspace")
+# bazel_skylib_workspace()
