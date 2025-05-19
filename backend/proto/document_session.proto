@@ -1,0 +1,32 @@
+// this file contains the protocol buffers for a document session
+
+syntax = "proto3";
+package document_session;
+
+// options for Java code generation
+option java_package = "com.docsclone.documents.proto.internal"; // Java package used for these internal protos
+option java_multiple_files = true; // generates each message and service in its own Java file
+option java_outer_classname = "InternalCommProto"; // name for a wrapper class if java_multiple_files was false (not critical when true)
+
+
+
+// --- Service for Manager <-> Worker Communication ---
+
+service ManagerWorkerService {
+  rpc RegisterWorker(WorkerRegistrationRequest) returns (WorkerRegistrationResponse);   // worker calls this to register with the Manager
+}
+
+
+
+// --- Messages for Worker Registration ---
+
+message WorkerRegistrationRequest {
+  string worker_id = 1;         // unique ID for the OT Worker
+  string worker_address = 2;    // E.g., "hostname:port" where this worker's gRPC server (for manager comms) is listening
+}
+
+message WorkerRegistrationResponse {
+  bool registration_successful = 1;
+  optional string message_from_manager = 2; // E.g., "Registration successful" or "Registration failed: reason..."
+}
+
