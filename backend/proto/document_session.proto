@@ -1,3 +1,5 @@
+// import "google/protobuf/timestamp.proto";
+
 // this file contains the protocol buffers for a document session
 
 syntax = "proto3";
@@ -12,13 +14,16 @@ option java_outer_classname = "InternalCommProto"; // name for a wrapper class i
 
 // --- Service for Manager <-> Worker Communication ---
 
-service ManagerWorkerService {
+service ManagerService { // Manager for OT Workers
   rpc RegisterWorker(WorkerRegistrationRequest) returns (WorkerRegistrationResponse);   // worker calls this to register with the Manager
 }
 
+service WorkerService { // Operational Transformation Worker
+  rpc AcceptDocumentSession(AssignDocumentSessionRequest) returns (AssignDocumentSessionResponse);
+  rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
+}
 
-
-// --- Messages for Worker Registration ---
+// --- Messages for Worker & Document Session Management ---
 
 message WorkerRegistrationRequest {
   string worker_id = 1;         // unique ID for the OT Worker
@@ -26,7 +31,136 @@ message WorkerRegistrationRequest {
 }
 
 message WorkerRegistrationResponse {
-  bool registration_successful = 1;
-  optional string message_from_manager = 2; // E.g., "Registration successful" or "Registration failed: reason..."
+  bool assignment_successful = 1;
+  string manager_api_key = 2; // stored by worker and used to verify future manager requests
+  optional string message_from_manager = 3; // E.g., "Assignment successful" or "Assignment failed: reason..."
+}
+
+message AssignDocumentSessionRequest {
+  string manager_api_key = 1; // verify this is the manager server that the worker registered with
+  string manager_address = 2;
+  string document_session_id = 3; // manager assigned document session ID for this document
+  DocumentMetadata document_metadata = 4; // worker can fetch the document content from DocumentPersistenceService using the metadata
+}
+
+message AssignDocumentSessionResponse {
+  bool assignment_successful = 1;
+  string worker_id = 2; 
+  string worker_address = 3; // if assignment successful, redirect all future document editors to this address
+  string document_session_id = 4;
+}
+
+message HeartbeatRequest {
+  string manager_api_key = 1; // verify this is the manager server that the worker registered with
+}
+
+message HeartbeatResponse { // used to determine if the worker has enough resources to handle the document session, and if the worker is still alive
+  string worker_id = 1;
+  int32 available_cores = 2; 
+  int32 available_memory_mb = 3; 
+}
+
+// --- Service for Document Persistence ---
+
+service DocumentPersistenceService {
+  rpc CreateDocument(CreateDocumentRequest) returns (DocumentMetadata);
+  rpc GetDocument(GetDocumentRequest) returns (Document);
+  rpc UpdateDocumentContent(UpdateDocumentContentRequest) returns (UpdateDocumentContentResponse); // initially, this could just save the whole document content
+  rpc ListDocuments(ListDocumentsRequest) returns (ListDocumentsResponse);
+  rpc DeleteDocument(DeleteDocumentRequest) returns (DeleteDocumentResponse);
+}
+
+// --- Messages for Document Persistence ---
+
+message CreateDocumentRequest {
+  Document document = 1;
+  string user_email = 2;  // verify this is a real user that signed up for the service
+}
+
+message GetDocumentRequest {
+  string document_uuid = 1;
+  string user_email = 2;  // verify this user is allowed to access this document
+}
+
+message UpdateDocumentContentRequest { // for use by OT Workers, to update the persisted document content
+  Document document = 1;
+  string user_email = 2;  // verify this user is allowed to edit this document, compare with persisted document owner and collaborators
+}
+
+message UpdateDocumentContentResponse {
+  bool update_successful = 1;
+  optional string message_from_manager = 2; // E.g., "Update successful" or "Update failed: reason..."
+}
+
+message ListDocumentsRequest { // fetch all documents for a user, optionally with pagination or limit
+  string user_email = 1;  
+  optional int32 limit = 2;
+  optional int32 offset = 3;
+}
+
+message ListDocumentsResponse {
+  repeated DocumentMetadata document_metadata = 1;
+}
+
+message DeleteDocumentRequest {
+  string document_uuid = 1;
+  string user_email = 2;  // verify this user is allowed to delete this document, compare with persisted document owner and collaborators
+}
+
+message DeleteDocumentResponse {
+  bool delete_successful = 1;
+  optional string message_from_manager = 2; // E.g., "Delete successful" or "Delete failed: reason..."
+}
+
+// --- Document Content and Metadata ---
+
+message DocumentMetadata {
+  string document_uuid = 1; // unique identifier/key for the document
+  string document_name = 2;
+  string document_owner_email = 3;
+  repeated string collaborators_email = 4;
+  string created_at = 5;
+  string last_updated_at = 6;
+  // google.protobuf.Timestamp created_at = 5;
+  // google.protobuf.Timestamp last_updated_at = 6;
+  string document_session_id = 7; 
+}
+
+message Document {
+  DocumentMetadata document_metadata = 1;
+  repeated Element elements = 2;  // elements are the content of the document
+}
+
+message Element {
+  string element_id = 1; // unique ID for this element (paragraph, image, etc.)
+  oneof element_type {
+    Paragraph paragraph = 2;
+    ImageElement image = 3;
+  }
+}
+
+message ImageElement {
+  string image_content_hash = 1; // e.g., "sha256:hex_encoded_hash"
+  string mime_type = 2;          // e.g., "image/png"
+  optional string original_file_name = 3;
+  optional string caption = 4;
+  optional int32 display_width_px = 5;   // for rendering by client
+  optional int32 display_height_px = 6;  // for rendering by client
+}
+
+message Paragraph { 
+  repeated TextRun runs = 1;
+}
+
+message TextRun {
+  string text_content = 1;
+  optional TextStyle style = 2; // can have multiple styles for a single text run
+}
+
+message TextStyle {
+  optional bool bold = 1;      
+  optional bool italic = 2;      
+  optional bool underline = 3;    
+  optional string text_color_hex = 4; // colored text, e.g., "#FF0000"
 }
 
